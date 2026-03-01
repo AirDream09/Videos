@@ -20,10 +20,11 @@ header{padding:15px;font-size:22px;background:#14141f;text-align:center;border-b
 button{background:var(--accent);border:none;padding:8px 12px;margin:4px 0;border-radius:12px;font-weight:bold;cursor:pointer;transition:.2s;}
 button:hover{background:var(--accent-dark);}
 select,input{padding:8px;margin:4px 0;border-radius:8px;border:none;width:100%;background:#222;color:#fff;}
-.video-card{background:var(--card);padding:12px;border-radius:12px;margin-bottom:12px;position:relative;}
+.video-card{background:var(--card);padding:12px;border-radius:12px;margin-bottom:12px;position:relative;display:flex;justify-content:space-between;align-items:center;}
+.video-card span.seen{color:#00ff88;font-weight:bold;margin-left:8px;}
 video{width:100%;border-radius:12px;}
 .card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;}
-.progress{height:6px;background:#222;border-radius:3px;margin-top:6px;overflow:hidden;}
+.progress{height:6px;background:#222;border-radius:3px;margin-top:6px;overflow:hidden;flex:1;margin-left:10px;}
 .progress-fill{height:100%;background:var(--accent);transition:.3s;}
 .hidden{display:none !important;}
 .back-btn{margin:10px 0;cursor:pointer;color:var(--accent);}
@@ -39,28 +40,24 @@ video{width:100%;border-radius:12px;}
   <button onclick="showAddEpisode()">➕ Episode hinzufügen</button>
 </div>
 
-<!-- Serien Übersicht -->
 <div class="container hidden" id="seriesContainer">
   <div class="back-btn" onclick="backToMain()">← Zurück zum Hauptmenü</div>
   <h3>Deine Serien</h3>
   <div id="seriesGrid" class="card-grid"></div>
 </div>
 
-<!-- Staffel Auswahl -->
 <div class="container hidden" id="seasonSelectContainer">
   <div class="back-btn" onclick="backToSeries()">← Zurück zu Serien</div>
   <h3 id="seasonSelectTitle">Staffel auswählen</h3>
   <select id="seasonDropdown" onchange="showEpisodes()"></select>
 </div>
 
-<!-- Folgen Übersicht -->
 <div class="container hidden" id="episodesContainer">
   <div class="back-btn" onclick="backToSeasonSelect()">← Zurück zu Staffeln</div>
   <h3 id="episodesTitle"></h3>
   <div id="episodesGrid" class="card-grid"></div>
 </div>
 
-<!-- Episode hinzufügen -->
 <div class="container hidden" id="addEpisodeContainer">
   <div class="back-btn" onclick="backToMain()">← Zurück zum Hauptmenü</div>
   <h3>Episode hinzufügen</h3>
@@ -71,7 +68,6 @@ video{width:100%;border-radius:12px;}
   <button onclick="addEpisode()">Speichern</button>
 </div>
 
-<!-- Fullscreen Player -->
 <div id="playerOverlay" class="hidden" style="
   position:fixed;top:0;left:0;width:100%;height:100%;
   background:rgba(0,0,0,0.95);display:flex;flex-direction:column;
@@ -95,15 +91,8 @@ request.onsuccess=e=>{
 };
 
 // Navigation
-function showSeries(){
-  hideAll();
-  document.getElementById("seriesContainer").classList.remove("hidden");
-  loadSeries();
-}
-function showAddEpisode(){
-  hideAll();
-  document.getElementById("addEpisodeContainer").classList.remove("hidden");
-}
+function showSeries(){hideAll(); document.getElementById("seriesContainer").classList.remove("hidden"); loadSeries();}
+function showAddEpisode(){hideAll(); document.getElementById("addEpisodeContainer").classList.remove("hidden");}
 function hideAll(){
   document.getElementById("mainMenu").classList.add("hidden");
   document.getElementById("seriesContainer").classList.add("hidden");
@@ -123,7 +112,6 @@ function addEpisode(){
   const season=document.getElementById("seasonName").value.trim();
   const episode=document.getElementById("episodeName").value.trim();
   if(!series || !season || !episode) return alert("Alle Felder ausfüllen!");
-
   const data={id:Date.now(),series,season,episode,blob:file,watched:false,progress:0};
   const tx=db.transaction(["episodes"],"readwrite");
   tx.objectStore("episodes").add(data);
@@ -168,14 +156,12 @@ function deleteSeries(seriesName){
   const tx=db.transaction(["episodes"],"readwrite");
   const store=tx.objectStore("episodes");
   store.getAll().onsuccess=e=>{
-    e.target.result.forEach(ep=>{
-      if(ep.series===seriesName) store.delete(ep.id);
-    });
+    e.target.result.forEach(ep=>{if(ep.series===seriesName) store.delete(ep.id);});
     loadSeries();
   };
 }
 
-// Staffel auswählen
+// Staffel Auswahl
 let currentSeriesName="",currentEpisodes=[],currentSeasonName="",currentEpisodeIndex=0;
 function selectSeason(seriesName){
   hideAll();
@@ -185,8 +171,7 @@ function selectSeason(seriesName){
   dropdown.innerHTML="";
   for(const season in seriesData[seriesName]){
     const option=document.createElement("option");
-    option.value=season;
-    option.text=season;
+    option.value=season; option.text=season;
     dropdown.appendChild(option);
   }
   showEpisodes();
@@ -202,14 +187,16 @@ function showEpisodes(){
   currentEpisodes.forEach((ep,i)=>{
     const div=document.createElement("div");
     div.className="video-card";
-    div.innerHTML=`<b>${currentSeasonName}</b> - ${ep.episode}
-      <button onclick="playEpisode(${i})">▶ Abspielen</button>
-      <button class="delete-btn" onclick="deleteEpisode(${i})">Löschen</button>`;
+    const seenSpan = ep.watched ? `<span class="seen">✔</span>` : "";
+    div.innerHTML=`<div>${currentSeasonName} - ${ep.episode} ${seenSpan}</div>
+      <div>
+        <button onclick="playEpisode(${i})">▶ Abspielen</button>
+        <button class="delete-btn" onclick="deleteEpisode(${i})">Löschen</button>
+      </div>`;
     grid.appendChild(div);
   });
 }
 
-// Episode löschen
 function deleteEpisode(index){
   if(!confirm("Folge wirklich löschen?")) return;
   const ep=currentEpisodes[index];
@@ -226,6 +213,12 @@ function playEpisode(index){
   player.src=URL.createObjectURL(ep.blob);
   document.getElementById("playerOverlay").classList.remove("hidden");
   player.play();
+
+  // Folge als gesehen markieren
+  const tx=db.transaction(["episodes"],"readwrite");
+  const store=tx.objectStore("episodes");
+  ep.watched=true;
+  store.put(ep).onsuccess=()=>{ loadSeries(); showEpisodes(); };
 }
 function closePlayer(){
   const player=document.getElementById("videoPlayer");
@@ -233,14 +226,9 @@ function closePlayer(){
   player.src="";
   document.getElementById("playerOverlay").classList.add("hidden");
 }
-
-// Nächste Folge
 function nextEpisode(){
   currentEpisodeIndex++;
-  if(currentEpisodeIndex>=currentEpisodes.length){
-    alert("Keine weiteren Folgen!");
-    return;
-  }
+  if(currentEpisodeIndex>=currentEpisodes.length){ alert("Keine weiteren Folgen!"); return; }
   playEpisode(currentEpisodeIndex);
 }
 </script>
