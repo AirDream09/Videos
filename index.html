@@ -4,164 +4,204 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lets Archive Premium</title>
-
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#0b0b0f">
-
 <style>
-body{
-background:#0b0b0f;
-color:white;
-font-family:Arial;
-margin:0;
+:root{
+  --bg:#0b0b0f;
+  --card:#1a1a2e;
+  --accent:#00ff88;
+  --accent-dark:#00cc66;
+  --text:#fff;
+  --muted:#777;
 }
-
-header{
-padding:15px;
-font-size:22px;
-background:#14141f;
-text-align:center;
-}
-
-.container{
-padding:15px;
-}
-
-button{
-background:#00ff88;
-border:none;
-padding:8px 12px;
-margin:4px 0;
-border-radius:8px;
-font-weight:bold;
-cursor:pointer;
-}
-
-select,input{
-padding:8px;
-margin:4px 0;
-border-radius:6px;
-border:none;
-}
-
-.video-card{
-background:#1b1b2b;
-padding:10px;
-border-radius:10px;
-margin-bottom:10px;
-}
-
-video{
-width:100%;
-border-radius:10px;
-}
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Arial',sans-serif;}
+body{background:var(--bg);color:var(--text);min-height:100vh;}
+header{padding:15px;font-size:22px;background:#14141f;text-align:center;border-bottom:2px solid var(--accent);border-radius:0 0 15px 15px;}
+.container{padding:15px;}
+button{background:var(--accent);border:none;padding:8px 12px;margin:4px 0;border-radius:12px;font-weight:bold;cursor:pointer;transition:.2s;}
+button:hover{background:var(--accent-dark);}
+select,input{padding:8px;margin:4px 0;border-radius:8px;border:none;width:100%;background:#222;color:#fff;}
+.video-card{background:var(--card);padding:12px;border-radius:12px;margin-bottom:12px;}
+video{width:100%;border-radius:12px;}
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;}
+.progress{height:6px;background:#222;border-radius:3px;margin-top:6px;overflow:hidden;}
+.progress-fill{height:100%;background:var(--accent);transition:.3s;}
+.hidden{display:none !important;}
+.back-btn{margin:10px 0;cursor:pointer;color:var(--accent);}
 </style>
 </head>
 <body>
 
 <header>🎬 Lets Archive Premium</header>
 
-<div class="container">
+<div class="container" id="mainMenu">
+  <button onclick="showSeries()">📺 Serien ansehen</button>
+  <button onclick="showAddEpisode()">➕ Episode hinzufügen</button>
+</div>
 
-<h3>Neue Episode hinzufügen</h3>
-<input type="text" id="seriesName" placeholder="Serie">
-<input type="text" id="seasonName" placeholder="Staffel">
-<input type="text" id="episodeName" placeholder="Episode Titel">
-<input type="file" id="videoUpload" accept="video/*">
-<button onclick="addEpisode()">Speichern</button>
+<!-- Serien Übersicht -->
+<div class="container hidden" id="seriesContainer">
+  <div class="back-btn" onclick="backToMain()">← Zurück zum Hauptmenü</div>
+  <h3>Deine Serien</h3>
+  <div id="seriesGrid" class="card-grid"></div>
+</div>
 
-<hr>
+<!-- Staffel Übersicht -->
+<div class="container hidden" id="seasonContainer">
+  <div class="back-btn" onclick="backToSeries()">← Zurück zu Serien</div>
+  <h3 id="seasonTitle"></h3>
+  <div id="episodesGrid" class="card-grid"></div>
+</div>
 
-<h3>Suche</h3>
-<input type="text" id="search" placeholder="Episode suchen..." oninput="displayEpisodes()">
+<!-- Episode hinzufügen -->
+<div class="container hidden" id="addEpisodeContainer">
+  <div class="back-btn" onclick="backToMain()">← Zurück zum Hauptmenü</div>
+  <h3>Episode hinzufügen</h3>
+  <input type="text" id="seriesName" placeholder="Serie">
+  <input type="text" id="seasonName" placeholder="Staffel">
+  <input type="text" id="episodeName" placeholder="Episode Titel">
+  <input type="file" id="videoUpload" accept="video/*">
+  <button onclick="addEpisode()">Speichern</button>
+</div>
 
-<hr>
-
-<div id="videoList"></div>
-
+<!-- Fullscreen Player -->
+<div id="playerOverlay" class="hidden" style="
+  position:fixed;top:0;left:0;width:100%;height:100%;
+  background:rgba(0,0,0,0.95);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;z-index:999;padding:15px;">
+  <div class="back-btn" onclick="closePlayer()">← Zurück</div>
+  <video id="videoPlayer" controls style="width:90%;max-width:800px;" autoplay></video>
+  <button onclick="nextEpisode()">▶ Nächste Folge</button>
 </div>
 
 <script>
+// IndexedDB Setup
 let db;
 const request=indexedDB.open("PremiumVideoDB",1);
-
 request.onupgradeneeded=e=>{
-db=e.target.result;
-db.createObjectStore("episodes",{keyPath:"id"});
+  db=e.target.result;
+  db.createObjectStore("episodes",{keyPath:"id"});
 };
-
 request.onsuccess=e=>{
-db=e.target.result;
-displayEpisodes();
+  db=e.target.result;
+  loadSeries();
 };
 
+// === Navigation ===
+function showSeries(){
+  document.getElementById("mainMenu").classList.add("hidden");
+  document.getElementById("seriesContainer").classList.remove("hidden");
+  loadSeries();
+}
+function showAddEpisode(){
+  document.getElementById("mainMenu").classList.add("hidden");
+  document.getElementById("addEpisodeContainer").classList.remove("hidden");
+}
+function backToMain(){
+  document.getElementById("addEpisodeContainer").classList.add("hidden");
+  document.getElementById("seriesContainer").classList.add("hidden");
+  document.getElementById("seasonContainer").classList.add("hidden");
+  document.getElementById("mainMenu").classList.remove("hidden");
+}
+function backToSeries(){
+  document.getElementById("seasonContainer").classList.add("hidden");
+  document.getElementById("seriesContainer").classList.remove("hidden");
+}
+
+// === Datenverwaltung ===
 function addEpisode(){
-const file=document.getElementById("videoUpload").files[0];
-if(!file)return alert("Video wählen!");
+  const file=document.getElementById("videoUpload").files[0];
+  if(!file) return alert("Video wählen!");
+  const series=document.getElementById("seriesName").value.trim();
+  const season=document.getElementById("seasonName").value.trim();
+  const episode=document.getElementById("episodeName").value.trim();
+  if(!series || !season || !episode) return alert("Alle Felder ausfüllen!");
 
-const data={
-id:Date.now(),
-series:seriesName.value,
-season:seasonName.value,
-episode:episodeName.value,
-blob:file,
-watched:false,
-progress:0
-};
+  const data={id:Date.now(),series,season,episode,blob:file,watched:false,progress:0};
 
-const tx=db.transaction(["episodes"],"readwrite");
-tx.objectStore("episodes").add(data);
-tx.oncomplete=()=>{
-displayEpisodes();
-};
+  const tx=db.transaction(["episodes"],"readwrite");
+  tx.objectStore("episodes").add(data);
+  tx.oncomplete=()=>{alert("Episode gespeichert!");}
 }
 
-function displayEpisodes(){
-const list=document.getElementById("videoList");
-list.innerHTML="";
-const search=document.getElementById("search").value.toLowerCase();
-
-const tx=db.transaction(["episodes"],"readonly");
-const store=tx.objectStore("episodes");
-store.getAll().onsuccess=e=>{
-let episodes=e.target.result;
-
-episodes=episodes.filter(ep=>
-ep.episode.toLowerCase().includes(search)
-);
-
-episodes.forEach(ep=>{
-const url=URL.createObjectURL(ep.blob);
-
-const div=document.createElement("div");
-div.className="video-card";
-
-div.innerHTML=`
-<b>${ep.series} - ${ep.season}</b><br>
-${ep.episode}<br>
-<video controls ontimeupdate="saveProgress(this,${ep.id})" src="${url}"></video>
-`;
-
-list.appendChild(div);
-});
-};
+// === Serien laden ===
+function loadSeries(){
+  const tx=db.transaction(["episodes"],"readonly");
+  const store=tx.objectStore("episodes");
+  store.getAll().onsuccess=e=>{
+    const episodes=e.target.result;
+    const seriesObj={};
+    episodes.forEach(ep=>{
+      if(!seriesObj[ep.series]) seriesObj[ep.series]={};
+      if(!seriesObj[ep.series][ep.season]) seriesObj[ep.series][ep.season]=[];
+      seriesObj[ep.series][ep.season].push(ep);
+    });
+    renderSeries(seriesObj);
+  };
 }
 
-function saveProgress(video,id){
-const tx=db.transaction(["episodes"],"readwrite");
-const store=tx.objectStore("episodes");
-store.get(id).onsuccess=e=>{
-let data=e.target.result;
-data.progress=video.currentTime;
-store.put(data);
-};
+function renderSeries(seriesObj){
+  const grid=document.getElementById("seriesGrid");
+  grid.innerHTML="";
+  for(const seriesName in seriesObj){
+    const total=Object.values(seriesObj[seriesName]).flat().length;
+    const seen=Object.values(seriesObj[seriesName]).flat().filter(e=>e.watched).length;
+    const div=document.createElement("div");
+    div.className="video-card";
+    div.innerHTML=`<b>${seriesName}</b><br>${total} Folgen<br>
+    <div class="progress"><div class="progress-fill" style="width:${(seen/total)*100}%"></div></div>`;
+    div.onclick=()=>openSeason(seriesName,seriesObj[seriesName]);
+    grid.appendChild(div);
+  }
 }
 
-if("serviceWorker" in navigator){
-navigator.serviceWorker.register("service-worker.js");
+let currentEpisodes=[],currentSeriesName="",currentSeasonName="",currentEpisodeIndex=0;
+
+// === Staffel öffnen ===
+function openSeason(seriesName,seasons){
+  document.getElementById("seriesContainer").classList.add("hidden");
+  document.getElementById("seasonContainer").classList.remove("hidden");
+  currentSeriesName=seriesName;
+  const grid=document.getElementById("episodesGrid");
+  grid.innerHTML="";
+  for(const season in seasons){
+    seasons[season].forEach((ep,i)=>{
+      const div=document.createElement("div");
+      div.className="video-card";
+      div.innerHTML=`<b>${season}</b> - ${ep.episode}`;
+      div.onclick=()=>{playEpisode(seriesName,season,seasons[season],i);}
+      grid.appendChild(div);
+    });
+  }
 }
+
+// === Player ===
+function playEpisode(seriesName,season,episodes,index){
+  document.getElementById("playerOverlay").classList.remove("hidden");
+  currentEpisodes=episodes;
+  currentSeasonName=season;
+  currentEpisodeIndex=index;
+  const player=document.getElementById("videoPlayer");
+  player.src=URL.createObjectURL(episodes[index].blob);
+  player.play();
+}
+
+function closePlayer(){
+  document.getElementById("playerOverlay").classList.add("hidden");
+  const player=document.getElementById("videoPlayer");
+  player.pause();
+  player.src="";
+}
+
+// === Nächste Folge Autoplay ===
+function nextEpisode(){
+  currentEpisodeIndex++;
+  if(currentEpisodeIndex>=currentEpisodes.length){
+    alert("Keine weiteren Folgen!");
+    return;
+  }
+  playEpisode(currentSeriesName,currentSeasonName,currentEpisodes,currentEpisodeIndex);
+}
+
 </script>
-
 </body>
-
 </html>
