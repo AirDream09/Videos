@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lets Archive Premium</title>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0b0b0f">
+
+<style>
+body{
+background:#0b0b0f;
+color:white;
+font-family:Arial;
+margin:0;
+}
+
+header{
+padding:15px;
+font-size:22px;
+background:#14141f;
+text-align:center;
+}
+
+.container{
+padding:15px;
+}
+
+button{
+background:#00ff88;
+border:none;
+padding:8px 12px;
+margin:4px 0;
+border-radius:8px;
+font-weight:bold;
+cursor:pointer;
+}
+
+select,input{
+padding:8px;
+margin:4px 0;
+border-radius:6px;
+border:none;
+}
+
+.video-card{
+background:#1b1b2b;
+padding:10px;
+border-radius:10px;
+margin-bottom:10px;
+}
+
+video{
+width:100%;
+border-radius:10px;
+}
+</style>
+</head>
+<body>
+
+<header>🎬 Lets Archive Premium</header>
+
+<div class="container">
+
+<h3>Neue Episode hinzufügen</h3>
+<input type="text" id="seriesName" placeholder="Serie">
+<input type="text" id="seasonName" placeholder="Staffel">
+<input type="text" id="episodeName" placeholder="Episode Titel">
+<input type="file" id="videoUpload" accept="video/*">
+<button onclick="addEpisode()">Speichern</button>
+
+<hr>
+
+<h3>Suche</h3>
+<input type="text" id="search" placeholder="Episode suchen..." oninput="displayEpisodes()">
+
+<hr>
+
+<div id="videoList"></div>
+
+</div>
+
+<script>
+let db;
+const request=indexedDB.open("PremiumVideoDB",1);
+
+request.onupgradeneeded=e=>{
+db=e.target.result;
+db.createObjectStore("episodes",{keyPath:"id"});
+};
+
+request.onsuccess=e=>{
+db=e.target.result;
+displayEpisodes();
+};
+
+function addEpisode(){
+const file=document.getElementById("videoUpload").files[0];
+if(!file)return alert("Video wählen!");
+
+const data={
+id:Date.now(),
+series:seriesName.value,
+season:seasonName.value,
+episode:episodeName.value,
+blob:file,
+watched:false,
+progress:0
+};
+
+const tx=db.transaction(["episodes"],"readwrite");
+tx.objectStore("episodes").add(data);
+tx.oncomplete=()=>{
+displayEpisodes();
+};
+}
+
+function displayEpisodes(){
+const list=document.getElementById("videoList");
+list.innerHTML="";
+const search=document.getElementById("search").value.toLowerCase();
+
+const tx=db.transaction(["episodes"],"readonly");
+const store=tx.objectStore("episodes");
+store.getAll().onsuccess=e=>{
+let episodes=e.target.result;
+
+episodes=episodes.filter(ep=>
+ep.episode.toLowerCase().includes(search)
+);
+
+episodes.forEach(ep=>{
+const url=URL.createObjectURL(ep.blob);
+
+const div=document.createElement("div");
+div.className="video-card";
+
+div.innerHTML=`
+<b>${ep.series} - ${ep.season}</b><br>
+${ep.episode}<br>
+<video controls ontimeupdate="saveProgress(this,${ep.id})" src="${url}"></video>
+`;
+
+list.appendChild(div);
+});
+};
+}
+
+function saveProgress(video,id){
+const tx=db.transaction(["episodes"],"readwrite");
+const store=tx.objectStore("episodes");
+store.get(id).onsuccess=e=>{
+let data=e.target.result;
+data.progress=video.currentTime;
+store.put(data);
+};
+}
+
+if("serviceWorker" in navigator){
+navigator.serviceWorker.register("service-worker.js");
+}
+</script>
+
+</body>
+</html>
